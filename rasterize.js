@@ -13,7 +13,14 @@ var triangleBuffer; // this contains indices into vertexBuffer in triples
 var triBufferSize = 0; // the number of indices in the triangle buffer
 var vertexPositionAttrib; // where to put position for vertex shader
 
+var VertexAmbAttr;
+var VertexSpecAttr;
+var VertexDiffuseAttr;
 
+
+var amb_buffer;
+var diff_buffer;
+var spec_buffer;
 // ASSIGNMENT HELPER FUNCTIONS
 
 // get the JSON file from the passed URL
@@ -71,6 +78,7 @@ function loadTriangles() {
     //using class exercise 5 code as bootstrap
     var inputTriangles = getJSONFile(Inp_triangles2,"triangles");
 
+
     if (inputTriangles != String.null) {
         var whichSetVert; // index of vertex in current triangle set
         var whichSetTri; // index of triangle in current triangle set
@@ -80,6 +88,13 @@ function loadTriangles() {
         var vtxToAdd = []; // vtx coords to add to the coord array
         var indexOffset = vec3.create(); // the index offset for the current set
         var triToAdd = vec3.create(); // tri indices to add to the index array
+        var AmbArray=[];
+        var DiffuseArray=[];
+        var SpecArray=[];
+
+        var AmbAdd=[];
+        var SpecAdd=[];
+        var DiffuseAdd=[];
 
         for (var whichSet=0; whichSet<inputTriangles.length; whichSet++) {
             vec3.set(indexOffset,vtxBufferSize,vtxBufferSize,vtxBufferSize); // update vertex offset
@@ -88,6 +103,17 @@ function loadTriangles() {
             for (whichSetVert=0; whichSetVert<inputTriangles[whichSet].vertices.length; whichSetVert++) {
                 vtxToAdd = inputTriangles[whichSet].vertices[whichSetVert];
                 coordArray.push(vtxToAdd[0],vtxToAdd[1],vtxToAdd[2]);
+
+                AmbAdd = inputTriangles[whichSet].material.ambient;
+                AmbArray.push(AmbAdd[0],AmbAdd[1],AmbAdd[2]);
+
+                SpecAdd = inputTriangles[whichSet].material.specular;
+                SpecArray.push(SpecAdd[0], SpecAdd[1], SpecAdd[2]);
+
+                DiffuseAdd = inputTriangles[whichSet].material.diffuse;
+                DiffuseArray.push(DiffuseAdd[0], DiffuseAdd[1], DiffuseAdd[2]);
+
+
             } // end for vertices in set
 
             // set up the triangle index array, adjusting indices across sets
@@ -111,6 +137,19 @@ function loadTriangles() {
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, triangleBuffer); // activate that buffer
         gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,new Uint16Array(indexArray),gl.STATIC_DRAW); // indices to that buffer
 
+
+        amb_buffer = gl.createBuffer(); // init empty vertex coord buffer
+        gl.bindBuffer(gl.ARRAY_BUFFER,amb_buffer); // activate that buffer
+        gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(AmbArray),gl.STATIC_DRAW);
+
+        spec_buffer = gl.createBuffer(); // init empty vertex coord buffer
+        gl.bindBuffer(gl.ARRAY_BUFFER,spec_buffer); // activate that buffer
+        gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(SpecArray),gl.STATIC_DRAW);
+
+        diff_buffer = gl.createBuffer(); // init empty vertex coord buffer
+        gl.bindBuffer(gl.ARRAY_BUFFER, diff_buffer); // activate that buffer
+        gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(DiffuseArray),gl.STATIC_DRAW);
+
     } // end if triangles found
 } // end load triangles
 
@@ -118,17 +157,33 @@ function loadTriangles() {
 function setupShaders() {
 
     // define fragment shader in essl using es6 template strings
-    var fShaderCode = `
+    var fShaderCode =
+        `
+        precision mediump float;
+        varying vec3 v_color_amb;
+        varying vec3 v_vcolor_spec;
+        varying vec3 v_color_diffuse;
         void main(void) {
-            gl_FragColor = vec4(1.0, 1.0, 1.9, 1.0); // all fragments are white
+            gl_FragColor = vec4(v_color_diffuse, 1.0); // all fragments are white
+            
         }
     `;
 
     // define vertex shader in essl using es6 template strings
     var vShaderCode = `
         attribute vec3 vertexPosition;
+        attribute vec3 VertAmb;
+        attribute vec3 VertSpec;
+        attribute vec3 VertDiffuse;
+        
+        varying vec3 v_color_amb;
+        varying vec3 v_color_spec;
+        varying vec3 v_color_diffuse;
         void main(void) {
             gl_Position = vec4(vertexPosition, 1.0); // use the untransformed position
+            v_color_amb =VertAmb;
+            v_color_diffuse =VertDiffuse;
+            v_color_spec =VertSpec;
         }
     `;
 
@@ -162,6 +217,13 @@ function setupShaders() {
                 vertexPositionAttrib = // get pointer to vertex shader input
                     gl.getAttribLocation(shaderProgram, "vertexPosition");
                 gl.enableVertexAttribArray(vertexPositionAttrib); // input to shader from array
+                VertexAmbAttr = gl.getAttribLocation(shaderProgram, "VertAmb");
+                gl.enableVertexAttribArray(VertexAmbAttr);
+                VertexDiffuseAttr= gl.getAttribLocation(shaderProgram, "VertDiffuse");
+                gl.enableVertexAttribArray(VertexDiffuseAttr);
+
+                VertexSpecAttr = gl.getAttribLocation(shaderProgram, "VertSpec`");
+                gl.enableVertexAttribArray(VertexSpecAttr);
             } // end if no shader program link errors
         } // end if no compile errors
     } // end try
@@ -178,6 +240,17 @@ function renderTriangles() {
     // vertex buffer: activate and feed into vertex shader
     gl.bindBuffer(gl.ARRAY_BUFFER,vertexBuffer); // activate
     gl.vertexAttribPointer(vertexPositionAttrib,3,gl.FLOAT,false,0,0); // feed
+
+    gl.bindBuffer(gl.ARRAY_BUFFER,amb_buffer); // activate
+    gl.vertexAttribPointer(VertexAmbAttr,3,gl.FLOAT,false,0,0);
+
+
+    gl.bindBuffer(gl.ARRAY_BUFFER,diff_buffer); // activate
+    gl.vertexAttribPointer(VertexDiffuseAttr,3,gl.FLOAT,false,0,0);
+
+
+    gl.bindBuffer(gl.ARRAY_BUFFER,spec_buffer); // activate
+    gl.vertexAttribPointer(VertexSpecAttr,3,gl.FLOAT,false,0,0);
 
     // triangle buffer: activate and render
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,triangleBuffer); // activate
